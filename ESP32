@@ -1,0 +1,107 @@
+#include <SPI.h>
+#include "config.h"
+// using two incompatible SPI devices, A and B. Incompatible means that they need different SPI_MODE
+
+const int slaveAPin = 21;
+
+SPISettings settingsA(4000000, MSBFIRST, SPI_MODE1);
+int vel = 255, bt = 1, tmr = 31, obj = 0;
+unsigned long tiempo = 0;
+AdafruitIO_Group *sensores = io.group("redsensores");
+
+void setup() {
+
+  // set the Slave Select Pins as outputs:
+
+  pinMode (slaveAPin, OUTPUT);
+  Serial.begin(115200);
+  // initialize SPI:
+  SPI.begin();
+
+  // WIFI del simulador
+  Serial.println("Conectando al WiFi");
+  WiFi.begin("UVG", "", 6);
+  while(WiFi.status() != WL_CONNECTED){
+    delay(100);
+    Serial.print(".");
+  }
+  Serial.println("Conectado");
+
+  // conexión con adafruit
+  Serial.println("Probando conexión con Adafruit");
+  io.connect();
+  Serial.println("Conectado con Adafruit");
+
+  // esperar conexión
+  Serial.println("Esperando conexión");
+  while(io.status()< AIO_CONNECTED){
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println(io.statusText());
+
+  tiempo = millis();
+  
+}
+
+uint8_t low_prs, high_prs, temperatura, velocidad, state;
+uint16_t pres;
+
+void loop() {
+  
+
+  SPI.beginTransaction(settingsA);
+  
+  digitalWrite (slaveAPin, HIGH);
+  delay(10);
+  digitalWrite (slaveAPin, LOW);
+  delay(10);
+  low_prs = SPI.transfer(1)/2;
+  delay(10);
+ 
+  digitalWrite (slaveAPin, HIGH);
+  delay(10);
+  digitalWrite (slaveAPin, LOW);
+  delay(10);
+  high_prs = SPI.transfer(2)/2;
+  delay(10);
+
+  digitalWrite (slaveAPin, HIGH);
+  delay(10);
+  digitalWrite (slaveAPin, LOW);
+  delay(10);
+  temperatura = SPI.transfer(3)/2;
+  delay(10);
+
+  digitalWrite (slaveAPin, HIGH);
+  delay(10);
+  digitalWrite (slaveAPin, LOW);
+  delay(10);
+  velocidad = SPI.transfer(4);
+  delay(10);
+
+  digitalWrite (slaveAPin, HIGH);
+  delay(10);
+  digitalWrite (slaveAPin, LOW);
+  delay(10);
+  state = SPI.transfer(0)/2;
+  delay(10);
+  
+  SPI.endTransaction();
+  pres = high_prs | 0x0000;
+  pres = low_prs | pres<<8;
+  printf("%d %d %d %d %d %d\n", low_prs, high_prs, temperatura, velocidad, state, pres);
+
+  io.run();  // mantener conexión con adafruit
+
+    // envío de datos a Adafruit
+  if(millis() > (tiempo + 2500)){ // envío cada x tiempo
+    tiempo = millis();
+    sensores->set("redsensores.presion", pres);
+    sensores->set("redsensores.status", state);
+    sensores->set("redsensores.temperatura", temperatura);
+    sensores->set("redsensores.velocidad", velocidad);
+    sensores->save(); // guardar asignaciones en feeds
+  }
+
+}
